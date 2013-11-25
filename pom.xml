@@ -9,7 +9,7 @@
 	<name>Thrift Mongo Bridge</name>
     <description />
     <url>
-        https://github.com/BreizhBeans/ThriftTools/tree/master/ThriftMongoBridge
+        https://github.com/BreizhBeans/ThriftMongoBridge
     </url>
     <licenses>
         <license>
@@ -20,8 +20,8 @@
     </licenses>
 
     <scm>
-        <connection>scm:git:https://github.com/BreizhBeans/ThriftTools.git</connection>
-        <developerConnection>scm:git:https://github.com/BreizhBeans/ThriftTools.git</developerConnection>
+        <connection>scm:git:https://github.com/BreizhBeans/ThriftMongoBridge.git</connection>
+        <developerConnection>scm:git:https://github.com/BreizhBeans/ThriftMongoBridge.git</developerConnection>
         <url>${project.url}</url>
     </scm>
 
@@ -134,14 +134,6 @@
 					</execution>
 				</executions>
 			</plugin>
-
-            <plugin>
-                <artifactId>maven-release-plugin</artifactId>
-                <version>2.3</version>
-                <configuration>
-                    <arguments>-f path/to/pom</arguments>
-                </configuration>
-            </plugin>
 		</plugins>
 	</build>
 </project>

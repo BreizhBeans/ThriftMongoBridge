@@ -3,8 +3,15 @@
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>org.breizhbeans.thrift.tools</groupId>
 	<artifactId>thriftMongoBridge</artifactId>
-    <version>0.0.2-SNAPSHOT</version>
+    <version>0.0.1-SNAPSHOT</version>
     <packaging>jar</packaging>
+
+    <parent>
+      <groupId>org.sonatype.oss</groupId>
+      <artifactId>oss-parent</artifactId>
+      <version>7</version>
+    </parent>
+
 
 	<name>Thrift Mongo Bridge</name>
     <description />

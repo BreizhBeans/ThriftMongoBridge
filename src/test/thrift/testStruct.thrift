@@ -58,6 +58,7 @@ struct BSonThrift {
 	11:binary binaryData,
 	12:ThriftEnum thriftEnum,
 	13:list<double> oneDoubleList,
+	14:map<ThriftEnum,string> mapEnum,
 }
 
 struct BSonComposite {

@@ -193,6 +193,20 @@ public class TestSerializer {
 		assertEquals(inputBsonThrift, dbObject);
 	}
 
+    @Test
+    public void testTBSonSerializerMapEnumString() throws Exception {
+        TBSONSerializer tbsonSerializer = new TBSONSerializer();
+
+        BSonThrift inputBSonThrift = new BSonThrift();
+        inputBSonThrift.putToMapEnum( ThriftEnum.VALUE_ONE, "test");
+
+        // serialize into DBObject
+        DBObject dbObject = tbsonSerializer.serialize(inputBSonThrift);
+
+        assertEquals(inputBSonThrift, dbObject);
+    }
+
+
 	// An map<object,object) is writable in thrift but not in JSON
 	@Test(expected=JSONParseException.class)
 	public void testTBSONSerializerMapObjectObject() throws Exception {

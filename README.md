@@ -20,7 +20,7 @@ Transform your Thrift objects into Mongo DBObject
 * DBObject dbObject = ThriftMongoHelper.thrift2DBObject(inputThriftObject);
 
 Transform your Mongo DBObject into Thrift objects 
-* MyThriftObject myThriftObject = (MyThriftObject) ThriftMongoHelper.DBObject2Thrift(dbObject);
+* MyThriftObject myThriftObject = (MyThriftObject) ThriftMongoHelper.DBObject2Thrift(dbObject, MyThriftObject.class);
 
 Use your wondefull Thrift objects in your business code, store it directly into MongoDB 
 What else ?

@@ -189,9 +189,14 @@ public class TBSONProtocol extends TProtocol {
 
 	protected class MapContext extends ObjectContainerContext {
 		private DBObject dbMap = new BasicDBObject();
+        private byte keyType;
 		public Stack<String> keyStack;
 		boolean extractKey = true;
-		
+
+        public MapContext(byte keyType) {
+            this.keyType = keyType;
+        }
+
 		public void setDbMap( DBObject dbMap ) {
 			this.dbMap = dbMap;
 			this.keyStack = new Stack<String>();
@@ -213,24 +218,30 @@ public class TBSONProtocol extends TProtocol {
         @Override
         void add(int value) {
             if (stringKey != null) {
-                dbMap.put(stringKey,Integer.valueOf(value));
+                dbMap.put(stringKey,value);
                 stringKey = null;
+            } else {
+                stringKey = Integer.toString(value);
             }
         }
 
         @Override
         void add(long value) {
             if (stringKey != null) {
-                dbMap.put(stringKey,Long.valueOf(value));
+                dbMap.put(stringKey,value);
                 stringKey = null;
+            } else {
+                stringKey = Long.toString(value);
             }
         }
 
         @Override
         void add(double value) {
             if (stringKey != null) {
-                dbMap.put(stringKey,Double.valueOf(value));
+                dbMap.put(stringKey,value);
                 stringKey = null;
+            } else {
+                stringKey = Double.toString(value);
             }
         }
 
@@ -259,6 +270,11 @@ public class TBSONProtocol extends TProtocol {
 				return dbMap.get(key);
 			}
 		}
+
+
+        public boolean isNextKey() {
+            return  extractKey;
+        }
 	}
 
 	protected class StructContext extends Context {
@@ -393,7 +409,7 @@ public class TBSONProtocol extends TProtocol {
 	}
 
 	public void writeMapBegin(TMap map) throws TException {
-		MapContext c = new MapContext();
+		MapContext c = new MapContext(map.keyType);
 		pushContext(c);
 	}
 
@@ -625,7 +641,7 @@ public class TBSONProtocol extends TProtocol {
 		if (context.fieldsStack.isEmpty() == false) {
 			String fieldName = context.fieldsStack.peek();
 			
-			MapContext mapContext = new MapContext();
+			MapContext mapContext = new MapContext(TType.VOID);
 			BasicDBObject dbMap = (BasicDBObject) context.dbObject.get(fieldName);
 			
 			mapContext.setDbMap(dbMap);
@@ -685,23 +701,23 @@ public class TBSONProtocol extends TProtocol {
 	}
 
 	public byte readByte() throws TException {
-		return ((Number) getCurrentFieldValue()).byteValue();
+		return ((Number) getCurrentFieldValue(TType.BYTE)).byteValue();
 	}
 
 	public short readI16() throws TException {
-		return ((Number) getCurrentFieldValue()).shortValue();
+		return ((Number) getCurrentFieldValue(TType.I16)).shortValue();
 	}
 
 	public int readI32() throws TException {
-		return ((Number) getCurrentFieldValue()).intValue();
+		return ((Number) getCurrentFieldValue(TType.I32)).intValue();
 	}
 
 	public long readI64() throws TException {
-		return ((Number) getCurrentFieldValue()).longValue();
+		return ((Number) getCurrentFieldValue(TType.I64)).longValue();
 	}
 
 	public double readDouble() throws TException {
-		return ((Number) getCurrentFieldValue()).doubleValue();
+		return ((Number) getCurrentFieldValue(TType.DOUBLE)).doubleValue();
 	}
 
 	public String readString() throws TException {
@@ -717,10 +733,44 @@ public class TBSONProtocol extends TProtocol {
 		} else if(context instanceof  ListContext) {
 			return ((ListContext)context).next();
 		} else if(context instanceof  MapContext) {
+
+            // IF YOU READ A KEY YOU MUST CONVERT THE STRING INTO NUMBER
+
 			return ((MapContext)context).next();
 		}
 		return null;
 	}
+
+
+    private Object getCurrentFieldValue(byte ttype) {
+        Context context = peekContext();
+        if( context instanceof StructContext && ((StructContext)context).fieldsStack.isEmpty() == false ) {
+            String fieldName = ((StructContext)context).fieldsStack.peek();
+            // Extracts the dbobject
+            return context.dbObject.get(fieldName);
+        } else if(context instanceof  ListContext) {
+            return ((ListContext)context).next();
+        } else if(context instanceof  MapContext) {
+
+            // IF YOU READ A KEY YOU MUST CONVERT THE STRING INTO NUMBER
+            if( ((MapContext)context).isNextKey()) {
+                switch( ttype ) {
+                    case TType.BYTE:
+                        return Byte.parseByte((String)((MapContext)context).next());
+                    case TType.I32:
+                    case TType.I16:
+                        return Integer.parseInt((String)((MapContext)context).next());
+                    case TType.I64:
+                        return Long.parseLong((String)((MapContext)context).next());
+                    case TType.DOUBLE:
+                        return Double.parseDouble((String)((MapContext)context).next());
+                }
+            }
+
+            return ((MapContext)context).next();
+        }
+        return null;
+    }
 
 	public String readStringBody(int size) throws TException {
 		return "";

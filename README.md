@@ -46,10 +46,9 @@ Fixes :
 * Support of primitive types on key maps (Long, Integer, Boolean, Double, Enum )
 
 ### 0.0.2
-First version deployed on Maven Central
+First release deployed on Maven Central
 
-### 0.0.1
-Not deployed
+### 0.0.1 (Not deployed)
 
 ## Bug tracker
 

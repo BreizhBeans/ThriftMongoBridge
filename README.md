@@ -38,20 +38,18 @@ And constructed with the following guidelines:
 ## RELEASES
 
 ### Future 0.0.4
-* Remove the introspection on TBase<?,?> try to replace it ByteCode manipulation for optimization
 * Adds a package ThriftMongoDialect for BSON manipulation based en TFields
 
-### Future 0.0.3 (release soon)
+### 0.0.3 
 Fixes :
 * Support of primitive types on key maps (Long, Integer, Boolean, Double, Enum )
 
 ### 0.0.2
-First release deployed on Maven Central
+* First release deployed on Maven Central
 
 ### 0.0.1 (Not deployed)
 
 ## Bug tracker
-
 Coming soon, with the first release !
 
 ## Authors

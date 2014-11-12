@@ -20,23 +20,25 @@ package org.breizhbeans.thrift.tools.thriftmongobridge;
 
 import org.apache.thrift.TBase;
 import org.apache.thrift.TException;
+import org.apache.thrift.TFieldIdEnum;
 import org.apache.thrift.protocol.TProtocolFactory;
 import org.breizhbeans.thrift.tools.thriftmongobridge.protocol.TBSONProtocol;
 
 import com.mongodb.DBObject;
+import org.breizhbeans.thrift.tools.thriftmongobridge.protocol.TBSONUnstackedProtocol;
 
 public class TBSONDeserializer {
 	/**
 	 * Internal protocol used for serializing objects.
 	 */
-	private TBSONProtocol protocol_;
+  private TBSONUnstackedProtocol protocol_;
 
-	public TBSONDeserializer() {
-		this(new TBSONProtocol.Factory());
+  public TBSONDeserializer() {
+    this(new TBSONUnstackedProtocol.Factory());
 	}
 
 	private TBSONDeserializer(TProtocolFactory protocolFactory) {
-		protocol_ = (TBSONProtocol) protocolFactory.getProtocol(null);
+    protocol_ = (TBSONUnstackedProtocol) protocolFactory.getProtocol(null);
 	}
 
 	public void deserialize(TBase<?,?> base, DBObject dbObject) throws TException {
@@ -48,5 +50,30 @@ public class TBSONDeserializer {
 			protocol_.reset();
 		}
 	}
+
+  /**
+   * Deserialize only a single Thrift object
+   * from a byte record.
+   * @param base The object to read into
+   * @param dbObject The serialized object to read from
+   * @param fieldIds The FieldId's to extract
+   * @throws TException
+   */
+  public void partialDeserialize(TBase<?,?> base, DBObject dbObject, TFieldIdEnum... fieldIds) throws TException {
+    try {
+      protocol_.setDBOject(dbObject);
+      protocol_.setBaseObject( base );
+      protocol_.setFieldIdsFilter(base, fieldIds);
+
+      base.read(protocol_);
+    } finally {
+      protocol_.reset();
+    }
+  }
+
+
+
+
+
 
 }

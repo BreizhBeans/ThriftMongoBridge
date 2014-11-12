@@ -16,31 +16,24 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.breizhbeans.thrift.tools.thriftmongobridge;
+package org.breizhbeans.thrift.tools.thriftmongobridge.protocol;
 
 import org.apache.thrift.TBase;
-import org.apache.thrift.TException;
-import org.apache.thrift.protocol.TProtocolFactory;
+import org.apache.thrift.meta_data.FieldMetaData;
+import org.apache.thrift.protocol.TField;
+import org.breizhbeans.thrift.tools.thriftmongobridge.secured.TBSONSecuredWrapper;
 
-import com.mongodb.DBObject;
-import org.breizhbeans.thrift.tools.thriftmongobridge.protocol.TBSONUnstackedProtocol;
+public class ThriftFieldMetadata {
 
- public class TBSONSerializer {
+  public TField tfield;
+  public FieldMetaData fieldMetaData;
+  public Class<? extends TBase> tbaseClass;
+  public TBSONSecuredWrapper.ThriftSecuredField securedFieldMetaData;
 
-  private TBSONUnstackedProtocol protocol_;
+  public ThriftFieldMetadata() {
 
-  public TBSONSerializer() {
-    this(new TBSONUnstackedProtocol.Factory());
   }
-
-  private TBSONSerializer(TProtocolFactory protocolFactory) {
-    protocol_ = (TBSONUnstackedProtocol) protocolFactory.getProtocol(null);
-  }
-
-  public DBObject serialize(TBase base) throws TException {
-    protocol_.setBaseObject(base);
-    base.write(protocol_);
-    return protocol_.getDBObject();
+  public ThriftFieldMetadata(String name, byte type, short id) {
+    tfield = new TField(name, type, id);
   }
 }
-

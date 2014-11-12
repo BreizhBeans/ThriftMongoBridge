@@ -46,14 +46,32 @@ public class TestDeserializer {
         deserializer.deserialize(actualThriftObject, expectedDbObject);
         Assert.assertEquals(expectedThriftObject, actualThriftObject);
     }
-	
-	@Test
-	public void testSimpleThrift() throws Exception {
+
+
+  @Test
+  public void testSimpleThrift() throws Exception {
+    TBSONDeserializer deserializer = new TBSONDeserializer();
+
+    BSonObjectList expectedThriftObject = new BSonObjectList();
+    expectedThriftObject.setSimpleString("simple string");
+
+    BSonObjectList actualThriftObject = new BSonObjectList();
+
+    DBObject expectedDbObject = getDBObject(expectedThriftObject);
+
+    deserializer.deserialize(actualThriftObject, expectedDbObject);
+
+    Assert.assertEquals(expectedThriftObject, actualThriftObject);
+  }
+
+
+  @Test
+	public void testSimpleListThrift() throws Exception {
 		TBSONDeserializer deserializer = new TBSONDeserializer();
 		
 		AnotherThrift anotherThrift1 = new AnotherThrift();
 		anotherThrift1.setAnotherString("str1");
-		anotherThrift1.setAnotherInteger(31);
+	  anotherThrift1.setAnotherInteger(31);
 		
 		AnotherThrift anotherThrift2 = new AnotherThrift();
 		anotherThrift2.setAnotherString("str2");
@@ -118,9 +136,46 @@ public class TestDeserializer {
 		System.out.println("actual   DBObject=" + actualThriftObject.toString());
 		
 		Assert.assertEquals(bsonComposite, actualThriftObject);	
-	}		
-	
-	@Test
+	}
+
+  @Test
+  public void testTBSONPartialDeserialize() throws Exception {
+    TBSONDeserializer deserializer = new TBSONDeserializer();
+
+    // FULL OBJECT
+    long ts = System.currentTimeMillis();
+    AnotherThrift anotherThrift = new AnotherThrift();
+    anotherThrift.setAnotherString("str1");
+    anotherThrift.setAnotherInteger(32);
+
+    BSonThrift inputBsonThrift = new BSonThrift();
+    inputBsonThrift.setOneString("string value");
+    inputBsonThrift.setAnotherThrift(anotherThrift);
+    inputBsonThrift.setOneBigInteger(System.currentTimeMillis());
+    inputBsonThrift.setOneInter(123456789);
+    inputBsonThrift.setOneBool(true);
+    inputBsonThrift.setOneBigInteger(ts);
+
+    DBObject inputDbObject = getDBObject(inputBsonThrift);
+
+    System.out.println("Input DBObject=" + inputDbObject.toString());
+
+    BSonThrift actualThriftObject = new BSonThrift();
+    deserializer.partialDeserialize(actualThriftObject, inputDbObject, BSonThrift._Fields.ONE_STRING, BSonThrift._Fields.ONE_INTER);
+
+    System.out.println("actual   DBObject=" + actualThriftObject.toString());
+
+    BSonThrift expectedBsonThrift = new BSonThrift();
+    expectedBsonThrift.setAnotherThrift(anotherThrift);
+    expectedBsonThrift.setOneBool(true);
+    expectedBsonThrift.setOneBigInteger(ts);
+
+    Assert.assertEquals(expectedBsonThrift, actualThriftObject);
+  }
+
+
+
+  @Test
 	public void testTBSONList() throws Exception {
 		TBSONDeserializer deserializer = new TBSONDeserializer();
 
@@ -133,9 +188,9 @@ public class TestDeserializer {
 		inputBsonThrift.addToOneStringList("toto1");
 		inputBsonThrift.addToOneStringList("toto3");
 
-        //A List of double
-        inputBsonThrift.addToOneDoubleList((double)8.123);
-        inputBsonThrift.addToOneDoubleList((double)8.129);
+    //A List of double
+    inputBsonThrift.addToOneDoubleList((double)8.123);
+    inputBsonThrift.addToOneDoubleList((double)8.129);
 
 		// A set (like Java Set)
 		inputBsonThrift.addToOneStringSet("set3");		

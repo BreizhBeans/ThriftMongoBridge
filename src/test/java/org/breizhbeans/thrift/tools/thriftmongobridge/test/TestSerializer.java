@@ -18,7 +18,7 @@
  */
 package org.breizhbeans.thrift.tools.thriftmongobridge.test;
 
-import com.mongodb.DBObject;
+import com.mongodb.*;
 import com.mongodb.util.JSON;
 import com.mongodb.util.JSONParseException;
 import org.apache.thrift.TBase;
@@ -26,15 +26,16 @@ import org.apache.thrift.TSerializer;
 import org.apache.thrift.protocol.TSimpleJSONProtocol;
 import org.breizhbeans.thrift.tools.thriftmongobridge.TBSONSerializer;
 import org.breizhbeans.thrift.tools.thriftmongobridge.ThriftMongoHelper;
+import org.breizhbeans.thrift.tools.thriftmongobridge.jug.test.Conversation;
+import org.breizhbeans.thrift.tools.thriftmongobridge.jug.test.Message;
+import org.breizhbeans.thrift.tools.thriftmongobridge.protocol.TBSONUnstackedProtocol;
 import org.junit.Assert;
 import org.junit.Test;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 public class TestSerializer {
+
 
     @Test
     public void testTBSONObjectListEnum() throws Exception {
@@ -226,28 +227,27 @@ public class TestSerializer {
 		DBObject dbObject = tbsonSerializer.serialize(inputBsonThrift);
 
 		assertEquals(inputBsonThrift, dbObject);
-	}	
-	
-	
-	
-	private void assertEquals( final TBase<?,?> thriftObject, final DBObject dbObject ) throws Exception {
-		//serialize the thrift object in JSON
-		TSerializer tjsonSerializer = new TSerializer(new TSimpleJSONProtocol.Factory());
-		byte[] jsonObject = tjsonSerializer.serialize(thriftObject);
-		
-		// Parse the JSON into DBObject
-		DBObject expectedDBObject = (DBObject) JSON.parse(new String(jsonObject));
-		
-		System.out.println("Thrift source=" + expectedDBObject.toString());
-		System.out.println("DB     source=" + dbObject.toString());
-		// Are the DBObject equals ?
-		Assert.assertEquals(expectedDBObject.toString(), dbObject.toString());
 	}
-	
+
+  @Test
+  public void testTBSONSerializerBinaryData() throws Exception {
+    BSonThrift inputBsonThrift = new BSonThrift();
+    BSonThrift outputBsonThrift = null;
+
+    inputBsonThrift.setOneString("string value");
+    inputBsonThrift.setBinaryData("binary data".getBytes());
+
+    DBObject dbObject = ThriftMongoHelper.thrift2DBObject(inputBsonThrift);
+    outputBsonThrift = (BSonThrift) ThriftMongoHelper.DBObject2Thrift(dbObject, BSonThrift.class);
+
+    Assert.assertEquals(inputBsonThrift, outputBsonThrift);
+
+  }
+
 	@Test
 	public void testSerializeIntegrity() throws Exception {
 		BSonThrift inputBsonThrift = new BSonThrift();
-		BSonThrift outputBsonThrift = new BSonThrift();
+		BSonThrift outputBsonThrift = null;
 
 		inputBsonThrift.setOneString("string value");
 		inputBsonThrift.setOneBigInteger(123456);
@@ -262,6 +262,138 @@ public class TestSerializer {
 
 		Assert.assertEquals(inputBsonThrift, outputBsonThrift);
 	}
+
+  private void assertEquals( final TBase<?,?> thriftObject, final DBObject dbObject ) throws Exception {
+    //serialize the thrift object in JSON
+    TSerializer tjsonSerializer = new TSerializer(new TSimpleJSONProtocol.Factory());
+    byte[] jsonObject = tjsonSerializer.serialize(thriftObject);
+
+    // Parse the JSON into DBObject
+    DBObject expectedDBObject = (DBObject) JSON.parse(new String(jsonObject));
+
+    System.out.println("Thrift source=" + expectedDBObject.toString());
+    System.out.println("DB     source=" + dbObject.toString());
+    // Are the DBObject equals ?
+    Assert.assertEquals(expectedDBObject.toString(), dbObject.toString());
+  }
+
+  private Message getMessage( int index){
+    Message message = new Message();
+    message.setDate(System.nanoTime());
+    message.setContent("A short message for the Lyon Jug");
+    message.setTalker("USER" + index);
+
+    List<String> reader = new ArrayList<String>();
+    reader.add("USER" + (index+1));
+    reader.add("USER" + (index+2));
+
+    message.setReadedBy(reader);
+    message.setSubject("A very nice subject");
+
+    return message;
+  }
+
+  //@Test
+  public void nottestTFields() throws Exception {
+    TBSONUnstackedProtocol prot = new TBSONUnstackedProtocol();
+
+    prot.getFieldId(Conversation.class, "contributors");
+    prot.getFieldId(Conversation.class, "contributors");
+    prot.getFieldId(Conversation.class, "contributors");
+    prot.getFieldId(Conversation.class, "contributors");
+    prot.getFieldId(Conversation.class, "contributors");
+
+    long reminingTime = 0;
+    for(int i=0; i<100000000; i++) {
+      long before = System.nanoTime();
+      prot.getFieldId(Conversation.class, "contributors");
+      reminingTime += System.nanoTime() - before;
+    }
+
+    System.out.println("average=" + reminingTime/100000000);
+  }
+
+  /*
+  @Test
+  public void writeJug() throws Exception{
+
+    Mongo mongo = new Mongo("localhost", 27017);
+    DB db = mongo.getDB("testtmb");
+
+    // get a single collection
+    DBCollection collection = db.getCollection("conversations");
+
+    int nbItems = 500000;
+    long elapsedTime = 0;
+    for(int i=0;i<nbItems;i++) {
+
+
+      Conversation conversation = new Conversation();
+
+      conversation.addToContributors("USER" + (i + 1));
+      conversation.addToContributors("USER" + (i + 2));
+      conversation.addToContributors("USER" + (i + 3));
+
+      conversation.addToTags("TAG" + System.currentTimeMillis());
+
+      conversation.addToMessages(getMessage(i));
+      conversation.addToMessages(getMessage(i));
+      conversation.addToMessages(getMessage(i));
+      conversation.addToMessages(getMessage(i));
+
+      // save
+      long before = System.nanoTime();
+      DBObject dbObject = ThriftMongoHelper.thrift2DBObject(conversation);
+      elapsedTime += (System.nanoTime()-before);
+      collection.save(dbObject);
+
+      if(i%10000 == 0){
+        System.out.println("Average us = " + (elapsedTime/10000)/1000);
+        elapsedTime = 0;
+      }
+    }
+  }
+
+  @Test
+  public void readJug()  throws Exception{
+    Mongo mongo = new Mongo("localhost", 27017);
+    DB db = mongo.getDB("testtmb");
+
+    // get a single collection
+    DBCollection collection = db.getCollection("conversations");
+
+    long before = System.nanoTime();
+
+    DBCursor cursor = collection.find();
+
+    int nbobj = 0;
+    List<Conversation> conversations = new ArrayList<>();
+    while(cursor.hasNext()){
+      DBObject dbObject = cursor.next();
+
+      //Conversation currentConv = (Conversation)
+      ThriftMongoHelper.DBObject2Thrift(dbObject, Conversation.class);
+      //conversations.add(currentConv);
+      nbobj++;
+    }
+
+    cursor = collection.find();
+
+   // nbobj = 0;
+
+    while(cursor.hasNext()){
+      DBObject dbObject = cursor.next();
+
+      //Conversation currentConv = (Conversation)
+      ThriftMongoHelper.DBObject2Thrift(dbObject, Conversation.class);
+      //conversations.add(currentConv);
+      nbobj++;
+    }
+
+    long after = System.nanoTime();
+    System.out.println("Average us = " + ((after-before)/nbobj)/1000);
+  }
+  */
 
     /*
 	@Test

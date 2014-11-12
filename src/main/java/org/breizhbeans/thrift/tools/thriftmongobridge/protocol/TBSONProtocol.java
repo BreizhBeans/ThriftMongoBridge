@@ -21,10 +21,11 @@ package org.breizhbeans.thrift.tools.thriftmongobridge.protocol;
 import java.io.UnsupportedEncodingException;
 import java.lang.reflect.Field;
 import java.nio.ByteBuffer;
-import java.util.Map;
+import java.util.*;
 import java.util.Map.Entry;
-import java.util.Stack;
+import java.util.concurrent.ConcurrentHashMap;
 
+import org.apache.commons.codec.binary.Hex;
 import org.apache.thrift.TBase;
 import org.apache.thrift.TException;
 import org.apache.thrift.TFieldIdEnum;
@@ -46,15 +47,29 @@ import org.apache.thrift.transport.TTransport;
 import com.mongodb.BasicDBList;
 import com.mongodb.BasicDBObject;
 import com.mongodb.DBObject;
+import org.breizhbeans.thrift.tools.thriftmongobridge.secured.TBSONSecuredWrapper;
 
 public class TBSONProtocol extends TProtocol {
 	public static final char QUOTE = '"';
 
-	private static ThreadLocal<Stack<Context>> threadSafeContextStack = new ThreadLocal<Stack<Context>>();
-	private static ThreadLocal<DBObject> threadSafeDBObject = new ThreadLocal<DBObject>();
-	private static ThreadLocal<TBase<?, ?>> threadSafeTBase = new ThreadLocal<TBase<?, ?>>();
+	private static ThreadLocal<Stack<Context>> threadSafeContextStack = new ThreadLocal<>();
+	private static ThreadLocal<DBObject> threadSafeDBObject = new ThreadLocal<>();
+  private static ThreadLocal<Map<Class<?>,List<Short>>> threadSafeFieldIds = new ThreadLocal<>();
+	private static ThreadLocal<TBase<?, ?>> threadSafeTBase = new ThreadLocal<>();
 
-	/**
+  private static ThreadLocal<Map<Class<?>,Map<String, ThriftField>>> threadSafeTFields = new ThreadLocal<>();
+
+  private static TBSONSecuredWrapper tbsonSecuredWrapper = new DefaultUnsecuredWrapper();
+
+  public static void addSecuredWrapper(TBSONSecuredWrapper tbsonSecuredWrapper) {
+    TBSONProtocol.tbsonSecuredWrapper = tbsonSecuredWrapper;
+  }
+
+  public static TBSONSecuredWrapper getSecuredWrapper() {
+    return TBSONProtocol.tbsonSecuredWrapper;
+  }
+
+  /**
 	 * Factory
 	 */
 	public static class Factory implements TProtocolFactory {
@@ -78,7 +93,19 @@ public class TBSONProtocol extends TProtocol {
 		threadSafeDBObject.set(dbObject);
 	}
 
-	public void setBaseObject(TBase<?, ?> base) {
+  public void setFieldIdsFilter(TBase<?, ?> base, TFieldIdEnum[] fieldIds) {
+    base.getClass();
+    List<Short> filteredFields = new ArrayList<>();
+
+    for(TFieldIdEnum tFieldIdEnum : fieldIds){
+      filteredFields.add(tFieldIdEnum.getThriftFieldId());
+    }
+    Map<Class<?>,List<Short>> filter = new HashMap<>();
+    filter.put(base.getClass(), filteredFields);
+    threadSafeFieldIds.set(filter);
+  }
+
+  public void setBaseObject(TBase<?, ?> base) {
 		threadSafeTBase.set(base);
 	}
 
@@ -89,9 +116,28 @@ public class TBSONProtocol extends TProtocol {
 	private static final TList EMPTY_LIST = new TList();
 	private static final TMap EMPTY_MAP = new TMap();
 
+
+  protected class ThriftField {
+    public TFieldIdEnum tfieldIdEnum;
+    public org.apache.thrift.meta_data.FieldMetaData fieldMetaData;
+
+    public ThriftField(TFieldIdEnum tfieldIdEnum, org.apache.thrift.meta_data.FieldMetaData fieldMetaData) {
+      this.tfieldIdEnum = tfieldIdEnum;
+      this.fieldMetaData = fieldMetaData;
+    }
+  }
+
 	protected abstract class Context {
 		public DBObject dbObject = null;
+    public DBObject securedDbObject = null;
 		public Object thriftObject;
+    public boolean secured = false;
+    public boolean hash = false;
+    public String name = null;
+    public Short thriftId;
+
+
+        abstract void addSecured(String value);
 
         abstract void add(String value);
 
@@ -103,6 +149,8 @@ public class TBSONProtocol extends TProtocol {
 
         abstract void add(ByteBuffer bin);
 
+
+
 		public void addDBObject(DBObject dbObject) {
 			this.dbObject = dbObject;
 
@@ -110,27 +158,39 @@ public class TBSONProtocol extends TProtocol {
 	}
 
 	protected class FieldContext extends Context {
-		public FieldContext(String name) {
-			this.name = name;
-		}
+
+    public FieldContext(String name, short thriftId, TBSONSecuredWrapper.ThriftSecuredField securedField) {
+      this.name = name;
+      this.thriftId = thriftId;
+      this.secured = securedField.isSecured();
+      this.hash = securedField.isHash();
+    }
+
 
 		public String name;
 		public Object value;
+    public Object securedValue;
 
-		void add(String value) {
+
+    @Override
+    void addSecured(String value) {
+      securedValue = value;
+    }
+
+    void add(String value) {
 			this.value = value;
 		}
 
 		void add(int value) {
-			this.value = Integer.valueOf(value);
+			this.value = value;
 		}
 
 		void add(long value) {
-			this.value = Long.valueOf(value);
+			this.value = value;
 		}
 
 		void add(double value) {
-			this.value = Double.valueOf(value);
+			this.value = value;
 		}
 
 		public void add(ByteBuffer bin) {
@@ -138,7 +198,7 @@ public class TBSONProtocol extends TProtocol {
 		}
 	}
 
-	// Clasa for all object container likes list set and maps
+	// Class for all object container likes list set and maps
 	protected abstract class ObjectContainerContext extends Context {
         abstract void add(DBObject value);
 	}
@@ -147,12 +207,18 @@ public class TBSONProtocol extends TProtocol {
 		BasicDBList dbList = new BasicDBList();
 		Integer index = 0;
 
-		void add(String value) {
+    @Override
+    void addSecured(String value) {
+
+    }
+
+    void add(String value) {
 			dbList.put(index.toString(), value);
 			index++;
 		}
 
         void add(int value) {
+
             dbList.put(index.toString(), Integer.valueOf(value));
             index++;
         }
@@ -189,24 +255,30 @@ public class TBSONProtocol extends TProtocol {
 
 	protected class MapContext extends ObjectContainerContext {
 		private DBObject dbMap = new BasicDBObject();
-        private byte keyType;
+    private byte keyType;
+
 		public Stack<String> keyStack;
 		boolean extractKey = true;
 
-        public MapContext(byte keyType) {
-            this.keyType = keyType;
-        }
+    public MapContext(byte keyType) {
+        this.keyType = keyType;
+    }
 
 		public void setDbMap( DBObject dbMap ) {
 			this.dbMap = dbMap;
-			this.keyStack = new Stack<String>();
+			this.keyStack = new Stack<>();
 			this.keyStack.addAll(this.dbMap.keySet());			
 		}
 		
 		// A Map
 		private String stringKey = null;
 
-		void add(String value) {
+    @Override
+    void addSecured(String value) {
+
+    }
+
+    void add(String value) {
 			if (stringKey != null) {
 				dbMap.put(stringKey, value);
 				stringKey = null;
@@ -215,45 +287,45 @@ public class TBSONProtocol extends TProtocol {
 			}
 		}
 
-        @Override
-        void add(int value) {
-            if (stringKey != null) {
-                dbMap.put(stringKey,value);
-                stringKey = null;
-            } else {
-                stringKey = Integer.toString(value);
-            }
+    @Override
+    void add(int value) {
+        if (stringKey != null) {
+            dbMap.put(stringKey,value);
+            stringKey = null;
+        } else {
+            stringKey = Integer.toString(value);
         }
+    }
 
-        @Override
-        void add(long value) {
-            if (stringKey != null) {
-                dbMap.put(stringKey,value);
-                stringKey = null;
-            } else {
-                stringKey = Long.toString(value);
-            }
+    @Override
+    void add(long value) {
+        if (stringKey != null) {
+            dbMap.put(stringKey,value);
+            stringKey = null;
+        } else {
+            stringKey = Long.toString(value);
         }
+    }
 
-        @Override
-        void add(double value) {
-            if (stringKey != null) {
-                dbMap.put(stringKey,value);
-                stringKey = null;
-            } else {
-                stringKey = Double.toString(value);
-            }
+    @Override
+    void add(double value) {
+        if (stringKey != null) {
+            dbMap.put(stringKey,value);
+            stringKey = null;
+        } else {
+            stringKey = Double.toString(value);
         }
+    }
 
-        @Override
-        void add(ByteBuffer bin) {
-            if (stringKey != null) {
-                dbMap.put(stringKey, bin.array());
-                stringKey = null;
-            }
+    @Override
+    void add(ByteBuffer bin) {
+        if (stringKey != null) {
+            dbMap.put(stringKey, bin.array());
+            stringKey = null;
         }
+    }
 
-        void add(DBObject value) {
+    void add(DBObject value) {
 			if (stringKey != null) {
 				dbMap.put(stringKey, value);
 				stringKey = null;
@@ -272,7 +344,7 @@ public class TBSONProtocol extends TProtocol {
 		}
 
 
-        public boolean isNextKey() {
+    public boolean isNextKey() {
             return  extractKey;
         }
 	}
@@ -287,34 +359,41 @@ public class TBSONProtocol extends TProtocol {
 			this.fieldsStack.addAll(this.dbObject.keySet());
 		}
 		
-		public StructContext() {
+		public StructContext(String structName) {
+      name = structName;
 			dbObject = new BasicDBObject();
+      securedDbObject = null;
 		}
 
-        @Override
+    @Override
+    void addSecured(String value) {
+
+    }
+
+    @Override
 		void add(String value) {
 		}
 
-        @Override
-        void add(int value) {
-            // Nothing to do
-        }
-
-        @Override
-        void add(long value) {
-            // Nothing to do
-        }
-
-        @Override
-        void add(double value) {
-            // Nothing to do
-        }
-
-        @Override
-        void add(ByteBuffer bin) {
-            // Nothing to do
-        }
+    @Override
+    void add(int value) {
+        // Nothing to do
     }
+
+    @Override
+    void add(long value) {
+        // Nothing to do
+    }
+
+    @Override
+    void add(double value) {
+        // Nothing to do
+    }
+
+    @Override
+    void add(ByteBuffer bin) {
+        // Nothing to do
+    }
+  }
 
 	/**
 	 * Push a new write context onto the stack.
@@ -332,7 +411,7 @@ public class TBSONProtocol extends TProtocol {
 
 	protected boolean isContextEmpty() {
 		Stack<Context> stack = threadSafeContextStack.get();
-		if (stack == null || stack.size() == 0) {
+		if(stack==null || stack.size()==0) {
 			return true;
 		}
 		return false;
@@ -342,8 +421,7 @@ public class TBSONProtocol extends TProtocol {
 	 * Pop the last write context off the stack
 	 */
 	protected Context popContext() {
-		Context c = threadSafeContextStack.get().pop();
-		return c;
+		return threadSafeContextStack.get().pop();
 	}
 
 	protected Context peekContext() {
@@ -353,30 +431,31 @@ public class TBSONProtocol extends TProtocol {
 	public void writeMessageBegin(TMessage message) throws TException {
 		// trans_.write(LBRACKET);
 		pushContext(new ListContext());
-		writeString(message.name);
-		writeByte(message.type);
-		writeI32(message.seqid);
 	}
 
 	public void writeMessageEnd() throws TException {
 		popContext();
-		// trans_.write(RBRACKET);
 	}
 
 	public void writeStructBegin(TStruct struct) throws TException {
-		StructContext c = new StructContext();
+		StructContext c = new StructContext(struct.name);
 		pushContext(c);
 	}
 
 	public void writeStructEnd() throws TException {
 		// Gets the struct
-		DBObject dbObject = popContext().dbObject;
+    Context ctx = popContext();
+		DBObject dbObject = ctx.dbObject;
 
-		// Sets the DBObject for output
+    if(ctx.securedDbObject != null) {
+      dbObject.put("securedwrap", ctx.securedDbObject);
+    }
+
+    // Sets the DBObject for output
 		threadSafeDBObject.set(dbObject);
 
 		// if the stack is not empty add the struct current stack field
-		if (isContextEmpty() == false) {
+		if(!isContextEmpty()) {
 			Context fieldContext = peekContext();
 
 			// For the ListContext adds the strcut to the context
@@ -391,8 +470,15 @@ public class TBSONProtocol extends TProtocol {
 
 	public void writeFieldBegin(TField field) throws TException {
 		// Note that extra type information is omitted in BSON!
-		pushContext(new FieldContext(field.name));
-		writeString(field.name);
+    Context ctx = peekContext();
+    //TBSONSecuredWrapper.ThriftSecuredField securedField=tbsonSecuredWrapper.getField(ctx.name, field.id);
+    TBSONSecuredWrapper.ThriftSecuredField securedField=tbsonSecuredWrapper.getField(null, field.id);
+
+    if( securedField.isSecured() && ctx.securedDbObject==null){
+      ctx.securedDbObject = new BasicDBObject();
+    }
+
+		pushContext(new FieldContext(field.name, field.id, securedField));
 	}
 
 	public void writeFieldEnd() throws TException {
@@ -400,6 +486,9 @@ public class TBSONProtocol extends TProtocol {
 		Context dbObjectContext = peekContext();
 		if (c.dbObject == null) {
 			dbObjectContext.dbObject.put(((FieldContext) c).name, ((FieldContext) c).value);
+      if( dbObjectContext.securedDbObject!=null) {
+        dbObjectContext.securedDbObject.put(((FieldContext) c).thriftId.toString(), ((FieldContext) c).securedValue);
+      }
 		} else {
 			dbObjectContext.dbObject.put(((FieldContext) c).name, c.dbObject);
 		}
@@ -467,15 +556,6 @@ public class TBSONProtocol extends TProtocol {
 		peekContext().add(i32);
 	}
 
-	public void _writeStringData(String s) throws TException {
-		try {
-			byte[] b = s.getBytes("UTF-8");
-			peekContext().add(new String(s));
-		} catch (UnsupportedEncodingException uex) {
-			throw new TException("JVM DOES NOT SUPPORT UTF-8");
-		}
-	}
-
 	public void writeI64(long i64) throws TException {
 		peekContext().add(i64);
 	}
@@ -485,7 +565,22 @@ public class TBSONProtocol extends TProtocol {
 	}
 
 	public void writeString(String str) throws TException {
-		_writeStringData(str);
+    try {
+      Context context = peekContext();
+
+      if(context.secured){
+        // compute hash from the value if needed
+        if(context.hash) {
+          context.add(new Long(TBSONProtocol.tbsonSecuredWrapper.digest64(str.getBytes("UTF-8"))));
+        }
+        // crypt the value and add it to the secured field
+        context.addSecured(Hex.encodeHexString(TBSONProtocol.tbsonSecuredWrapper.cipher(str.getBytes("UTF-8"))));
+      } else {
+        context.add(new String(str.getBytes("UTF-8")));
+      }
+    } catch (UnsupportedEncodingException uex) {
+      throw new TException("JVM DOES NOT SUPPORT UTF-8");
+    }
 	}
 
 	public void writeBinary(ByteBuffer bin) throws TException {
@@ -507,10 +602,10 @@ public class TBSONProtocol extends TProtocol {
 		try {
 			DBObject dbObject = null;
 			Object thriftObject = null;
-			
-			StructContext context = new StructContext();
-			if (isContextEmpty() == false) {
+
+			if(!isContextEmpty()) {
 				Context currentContext = peekContext();
+
 				if (currentContext instanceof ListContext) {
 					dbObject = (DBObject) ((ListContext) currentContext).next();
 					thriftObject = ((ListContext) peekContext()).thriftObject;
@@ -521,19 +616,17 @@ public class TBSONProtocol extends TProtocol {
 					return ANONYMOUS_STRUCT;
 				}
 			} else {
-				thriftObject = this.threadSafeTBase.get();
+				thriftObject = threadSafeTBase.get();
 				dbObject = getDBObject();
-				// reserved name for the thrift deserialisation
-				dbObject.removeField("classname");
-			} 
+			}
+      StructContext context = new StructContext(thriftObject.getClass().getSimpleName());
 			context.setDbObject(dbObject);
 			context.thriftObject = thriftObject;
 			pushContext(context);
 
 			return ANONYMOUS_STRUCT;
 		} catch (Exception exp) {
-			TException texp = new TException("Unexpected readStructBegin", exp);
-			throw texp;
+      throw new TException("Unexpected readStructBegin", exp);
 		}
 	}
 
@@ -543,113 +636,150 @@ public class TBSONProtocol extends TProtocol {
 
 	public TField readFieldBegin() throws TException {
 		StructContext context = (StructContext) peekContext();
-		if (context.fieldsStack.isEmpty() == false) {
-			String fieldName = context.fieldsStack.peek();
+		if(context.fieldsStack.isEmpty()) {
+      // Empty stack -> returns a TType.STOP
+      return new TField();
+    }
+    String fieldName = context.fieldsStack.peek();
 
-			TField currentField = getTField(context.thriftObject, fieldName);
+    TField currentField = getTField(context.thriftObject, fieldName);
+    //currentField.id
+    // IF the field is skiped change the type to void
+    Map<Class<?>, List<Short>> filter = threadSafeFieldIds.get();
 
-			// If the field is a struct push a struct context in the stack
-			if (currentField.type == TType.STRUCT) {
-				StructContext structContext = new StructContext();
-				structContext.setDbObject((DBObject) context.dbObject.get(fieldName));
-				structContext.thriftObject = getThriftObject(context.thriftObject, fieldName);
-				pushContext(structContext);
-			}
-			return currentField;
-		}
-		// Empty TFiled returns a TType.STOP
-		return new TField();
+    if(filter!=null) {
+      List<Short> fieldsFiltered =  filter.get(context.thriftObject.getClass());
+      if(fieldsFiltered != null && fieldsFiltered.contains(currentField.id)) {
+        return new TField(currentField.name, TType.VOID, currentField.id);
+      }
+    }
+
+    // If the field is a struct push a struct context in the stack
+    if (currentField.type == TType.STRUCT) {
+      StructContext structContext = new StructContext(fieldName);
+      structContext.setDbObject((DBObject) context.dbObject.get(fieldName));
+      structContext.thriftObject = getThriftObject(context.thriftObject, fieldName);
+      pushContext(structContext);
+    }
+    return currentField;
 	}
 
 	private Object getThriftObject(Object thriftObject, String fieldName) throws TException {
 		try {
-			Field metafaField = thriftObject.getClass().getField("metaDataMap");
-			Map<?, org.apache.thrift.meta_data.FieldMetaData> fields = (Map<?, org.apache.thrift.meta_data.FieldMetaData>) metafaField.get(thriftObject);
-			// recurse on all sub structures
-			for (Entry<?, org.apache.thrift.meta_data.FieldMetaData> entry : fields.entrySet()) {
-				TFieldIdEnum field = (TFieldIdEnum) entry.getKey();
-				if (field.getFieldName().equals(fieldName)) {
-					switch (entry.getValue().valueMetaData.type) {
-					case TType.LIST:
-						ListMetaData listMetaData = (ListMetaData) entry.getValue().valueMetaData;
-						if( listMetaData.elemMetaData.isStruct()) {
-							return ((StructMetaData) listMetaData.elemMetaData).structClass.newInstance();
-						}
-						return null;						
-					case TType.SET:						
-						SetMetaData setMetaData = (SetMetaData) entry.getValue().valueMetaData;
-						if( setMetaData.isStruct()) {
-							return ((StructMetaData) setMetaData.elemMetaData).structClass.newInstance();
-						}
-						return null;
-					case TType.MAP:
-						MapMetaData mapMetaData = (MapMetaData) entry.getValue().valueMetaData;
-						if( mapMetaData.valueMetaData.isStruct()) {
-							return ((StructMetaData) mapMetaData.valueMetaData).structClass.newInstance();
-						}
-						return null;
-					case TType.STRUCT:
-						return ((StructMetaData) entry.getValue().valueMetaData).structClass.newInstance();
-					}
-				}
-			}
+      Map<String, ThriftField> classFields = getClassFields(thriftObject);
+      ThriftField thriftField = classFields.get(fieldName);
 
+      if(thriftField!=null) {
+        switch (thriftField.fieldMetaData.valueMetaData.type) {
+          case TType.LIST:
+            ListMetaData listMetaData = (ListMetaData) thriftField.fieldMetaData.valueMetaData;
+            if( listMetaData.elemMetaData.isStruct()) {
+              return ((StructMetaData) listMetaData.elemMetaData).structClass.newInstance();
+            }
+            return null;
+          case TType.SET:
+            SetMetaData setMetaData = (SetMetaData) thriftField.fieldMetaData.valueMetaData;
+            if( setMetaData.isStruct()) {
+              return ((StructMetaData) setMetaData.elemMetaData).structClass.newInstance();
+            }
+            return null;
+          case TType.MAP:
+            MapMetaData mapMetaData = (MapMetaData) thriftField.fieldMetaData.valueMetaData;
+            if( mapMetaData.valueMetaData.isStruct()) {
+              return ((StructMetaData) mapMetaData.valueMetaData).structClass.newInstance();
+            }
+            return null;
+          case TType.STRUCT:
+            return ((StructMetaData) thriftField.fieldMetaData.valueMetaData).structClass.newInstance();
+        }
+      }
 			throw new Exception("FieldName not finded name=" + fieldName);
 		} catch (Exception exp) {
-			TException texp = new TException("Unexpected getListThriftObject fieldName=" + fieldName, exp);
-			throw texp;
+      throw new TException("Unexpected getListThriftObject fieldName=" + fieldName, exp);
 		}
 	}
 
+
+  private Map<String, ThriftField> getClassFields(Object thriftObject) throws TException {
+    try {
+      Map<Class<?>,Map<String, ThriftField>> thriftFields = threadSafeTFields.get();
+
+      if(thriftFields==null){
+        thriftFields = new HashMap<>();
+      }
+
+      Class<?> tbase = thriftObject.getClass();
+      Map<String, ThriftField> classTFields = thriftFields.get(tbase);
+
+      if(classTFields!=null){
+        return classTFields;
+      }
+
+      classTFields = new HashMap<>();
+
+      Field metafaField = thriftObject.getClass().getField("metaDataMap");
+      Map<?, org.apache.thrift.meta_data.FieldMetaData> fields = (Map<?, org.apache.thrift.meta_data.FieldMetaData>) metafaField.get(thriftObject);
+      // recurse on all sub structures
+      for (Entry<?, org.apache.thrift.meta_data.FieldMetaData> entry : fields.entrySet()) {
+        TFieldIdEnum field = (TFieldIdEnum) entry.getKey();
+        classTFields.put(field.getFieldName(), new ThriftField(field, entry.getValue()));
+      }
+
+      thriftFields.put(tbase, classTFields);
+
+      threadSafeTFields.set(thriftFields);
+      return classTFields;
+    } catch (Exception exp) {
+      throw new TException("Unexpected object", exp);
+    }
+  }
+
+
 	private TField getTField(Object thriftObject, String fieldName) throws TException {
 		try {
-			byte type = 0;
-			short id = 0;
+      Map<String, ThriftField> classFields = getClassFields(thriftObject);
+      ThriftField thriftField = classFields.get(fieldName);
 
-			Field metafaField = thriftObject.getClass().getField("metaDataMap");
-			Map<?, org.apache.thrift.meta_data.FieldMetaData> fields = (Map<?, org.apache.thrift.meta_data.FieldMetaData>) metafaField.get(thriftObject);
-			// recurse on all sub structures
-			for (Entry<?, org.apache.thrift.meta_data.FieldMetaData> entry : fields.entrySet()) {
-				TFieldIdEnum field = (TFieldIdEnum) entry.getKey();
-				if (field.getFieldName().equals(fieldName)) {
-					type = entry.getValue().valueMetaData.type;
-					id = field.getThriftFieldId();
-					break;
-				}
-			}
-			// An enum type is deserialized as an I32
-			if (TType.ENUM == type) {
-				type = TType.I32; 
-			}
-			
-			return new TField("", type, id);
-		} catch (Exception exp) {
-			TException texp = new TException("Unexpected getTField fieldName=" + fieldName, exp);
-			throw texp;
+      if(thriftField==null) {
+        // Empty field -> skip
+        return new TField();
+      }
+
+      byte type = thriftField.fieldMetaData.valueMetaData.type;
+      short id = thriftField.tfieldIdEnum.getThriftFieldId();
+
+      // An enum type is deserialized as an I32
+      if (TType.ENUM == type) {
+        type = TType.I32;
+      }
+
+      return new TField("", type, id);
+    } catch (Exception exp) {
+			throw new TException("Unexpected getTField fieldName=" + fieldName, exp);
 		}
 	}
 
 	public void readFieldEnd() {
 		StructContext context = (StructContext) peekContext();
-		if (context.fieldsStack.isEmpty() == false) {
+		if(!context.fieldsStack.isEmpty()) {
 			context.fieldsStack.pop();
 		}
 	}
 
 	public TMap readMapBegin() throws TException {
 		StructContext context = (StructContext) peekContext();
-		if (context.fieldsStack.isEmpty() == false) {
-			String fieldName = context.fieldsStack.peek();
-			
-			MapContext mapContext = new MapContext(TType.VOID);
-			BasicDBObject dbMap = (BasicDBObject) context.dbObject.get(fieldName);
-			
-			mapContext.setDbMap(dbMap);
-			mapContext.thriftObject = getThriftObject(context.thriftObject, fieldName);
-			pushContext(mapContext);
-			return new TMap(TType.STRING, TType.STRING,dbMap.size());			
-		}
-		return EMPTY_MAP;
+		if(context.fieldsStack.isEmpty()) {
+      return EMPTY_MAP;
+    }
+    String fieldName = context.fieldsStack.peek();
+
+    MapContext mapContext = new MapContext(TType.VOID);
+    BasicDBObject dbMap = (BasicDBObject) context.dbObject.get(fieldName);
+
+    mapContext.setDbMap(dbMap);
+    mapContext.thriftObject = getThriftObject(context.thriftObject, fieldName);
+    pushContext(mapContext);
+    return new TMap(TType.STRING, TType.STRING,dbMap.size());
 	}
 
 	public void readMapEnd() {
@@ -658,18 +788,18 @@ public class TBSONProtocol extends TProtocol {
 
 	public TList readListBegin() throws TException {
 		StructContext context = (StructContext) peekContext();
-		if (context.fieldsStack.isEmpty() == false) {
-			String fieldName = context.fieldsStack.peek();
+		if(context.fieldsStack.isEmpty()) {
+      return EMPTY_LIST;
+    }
+    String fieldName = context.fieldsStack.peek();
 
-			ListContext listContext = new ListContext();
-			BasicDBList dbList = (BasicDBList) context.dbObject.get(fieldName);
+    ListContext listContext = new ListContext();
+    BasicDBList dbList = (BasicDBList) context.dbObject.get(fieldName);
 
-			listContext.dbList = dbList;
-			listContext.thriftObject = getThriftObject(context.thriftObject, fieldName);
-			pushContext(listContext);
-			return new TList(TType.LIST, dbList.size());
-		}
-		return EMPTY_LIST;
+    listContext.dbList = dbList;
+    listContext.thriftObject = getThriftObject(context.thriftObject, fieldName);
+    pushContext(listContext);
+    return new TList(TType.LIST, dbList.size());
 	}
 
 	public void readListEnd() {
@@ -678,18 +808,18 @@ public class TBSONProtocol extends TProtocol {
 
 	public TSet readSetBegin() throws TException {
 		StructContext context = (StructContext) peekContext();
-		if (context.fieldsStack.isEmpty() == false) {
-			String fieldName = context.fieldsStack.peek();
+		if(context.fieldsStack.isEmpty()) {
+      return EMPTY_SET;
+    }
+    String fieldName = context.fieldsStack.peek();
 
-			ListContext listContext = new ListContext();
-			BasicDBList dbList = (BasicDBList) context.dbObject.get(fieldName);
+    ListContext listContext = new ListContext();
+    BasicDBList dbList = (BasicDBList) context.dbObject.get(fieldName);
 
-			listContext.dbList = dbList;
-			listContext.thriftObject = getThriftObject(context.thriftObject, fieldName);
-			pushContext(listContext);
-			return new TSet(TType.SET, dbList.size());
-		}		
-		return EMPTY_SET;
+    listContext.dbList = dbList;
+    listContext.thriftObject = getThriftObject(context.thriftObject, fieldName);
+    pushContext(listContext);
+    return new TSet(TType.SET, dbList.size());
 	}
 
 	public void readSetEnd() {
@@ -747,7 +877,8 @@ public class TBSONProtocol extends TProtocol {
         if( context instanceof StructContext && ((StructContext)context).fieldsStack.isEmpty() == false ) {
             String fieldName = ((StructContext)context).fieldsStack.peek();
             // Extracts the dbobject
-            return context.dbObject.get(fieldName);
+            Object fieldReaded = context.dbObject.get(fieldName);
+            return fieldReaded;
         } else if(context instanceof  ListContext) {
             return ((ListContext)context).next();
         } else if(context instanceof  MapContext) {
@@ -783,5 +914,6 @@ public class TBSONProtocol extends TProtocol {
 	public void reset() {
 		threadSafeContextStack.remove();
 		threadSafeDBObject.remove();
+    threadSafeFieldIds.remove();
 	}
 }

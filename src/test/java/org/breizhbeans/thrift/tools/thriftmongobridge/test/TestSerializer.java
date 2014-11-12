@@ -36,6 +36,10 @@ import java.util.*;
 
 public class TestSerializer {
 
+    public TestSerializer() {
+      TBSONUnstackedProtocol.resetSecuredWrapper();
+      TBSONUnstackedProtocol.resetCache();
+    }
 
     @Test
     public void testTBSONObjectListEnum() throws Exception {

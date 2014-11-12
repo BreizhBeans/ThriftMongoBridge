@@ -23,6 +23,7 @@ import junit.framework.Assert;
 import org.apache.thrift.TBase;
 import org.breizhbeans.thrift.tools.thriftmongobridge.TBSONDeserializer;
 import org.breizhbeans.thrift.tools.thriftmongobridge.TBSONSerializer;
+import org.breizhbeans.thrift.tools.thriftmongobridge.protocol.TBSONUnstackedProtocol;
 import org.junit.Test;
 
 import java.util.HashMap;
@@ -30,8 +31,12 @@ import java.util.Map;
 
 public class TestDeserializer {
 
+  public TestDeserializer() {
+    TBSONUnstackedProtocol.resetSecuredWrapper();
+    TBSONUnstackedProtocol.resetCache();
+  }
 
-    @Test
+  @Test
     public void testTBSONObjectListEnum() throws Exception {
         TBSONDeserializer deserializer = new TBSONDeserializer();
 

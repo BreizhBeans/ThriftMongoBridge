@@ -56,7 +56,7 @@ public abstract class TBSONSecuredWrapper {
 
   private final ThriftSecuredField UNSECURED_FIELD = new ThriftSecuredField();
 
-  private static ConcurrentHashMap<Class<? extends TBase>, Map<Short, ThriftSecuredField>> securedFields = new ConcurrentHashMap<>();
+  private ConcurrentHashMap<Class<? extends TBase>, Map<Short, ThriftSecuredField>> securedFields = new ConcurrentHashMap<>();
 
   public void secureThriftFields(Class<? extends TBase> tbase, boolean hash, TFieldIdEnum... fields) throws Exception {
     Map<Short, ThriftSecuredField> classSecuredFields = securedFields.get(tbase);
@@ -69,6 +69,10 @@ public abstract class TBSONSecuredWrapper {
     }
 
     securedFields.put(tbase,classSecuredFields);
+  }
+
+  public void removeAll() {
+    securedFields.clear();
   }
 
   public void removeSecuredField(Class<? extends TBase> tbase, TFieldIdEnum field) {

@@ -24,34 +24,41 @@ import org.apache.thrift.TException;
 import org.apache.thrift.TFieldIdEnum;
 import org.breizhbeans.thrift.tools.thriftmongobridge.secured.TBSONSecuredWrapper;
 
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+
 /** Default Unsecured Wrapper
  *
  */
 public class DefaultUnsecuredWrapper extends TBSONSecuredWrapper {
 
+
+  public DefaultUnsecuredWrapper() {
+  }
+
   @Override
   public long digest64(byte[] data) throws TException {
-    throw new TException("SecureThriftFields unvailable on unsecured wrapper");
+    throw new TException("SecureThriftFields digest unvailable on unsecured wrapper");
   }
 
   @Override
   public byte[] cipher(byte[] data) throws TException {
-    throw new TException("SecureThriftFields unvailable on unsecured wrapper");
+    throw new TException("SecureThriftFields cipher unvailable on unsecured wrapper");
   }
 
   @Override
   public byte[] cipher(TBase<?, ?> thriftObject) throws TException {
-    throw new TException("SecureThriftFields unvailable on unsecured wrapper");
+    throw new TException("SecureThriftFields cipher unvailable on unsecured wrapper");
   }
 
   @Override
   public byte[] decipher(byte[] data) throws TException {
-    throw new TException("SecureThriftFields unvailable on unsecured wrapper");
+    throw new TException("SecureThriftFields decipher unvailable on unsecured wrapper");
   }
 
   @Override
   public TBase<?, ?> decipher(byte[] data, TBase<?, ?> thriftObject) throws TException {
-    throw new TException("SecureThriftFields unvailable on unsecured wrapper");
+    throw new TException("SecureThriftFields decipher unvailable on unsecured wrapper");
   }
 
   /*

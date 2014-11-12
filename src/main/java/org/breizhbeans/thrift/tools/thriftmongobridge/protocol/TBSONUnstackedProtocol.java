@@ -41,6 +41,7 @@ public class TBSONUnstackedProtocol extends TProtocol {
   // Contains the Thrift object + DBObject -> IO because I code it the Google IO's day :D
   private static ThreadLocal<Stack<ThriftIO>> threadSafeSIOStack = new ThreadLocal<>();
 
+  // IO DBObject and fields
   private static ThreadLocal<DBObject> threadSafeDBObject = new ThreadLocal<>();
   private static ThreadLocal<TBase<?, ?>> threadSafeTBase = new ThreadLocal<>();
 
@@ -61,8 +62,18 @@ public class TBSONUnstackedProtocol extends TProtocol {
     TBSONUnstackedProtocol.tbsonSecuredWrapper = tbsonSecuredWrapper;
   }
 
+  public static void resetSecuredWrapper() {
+    TBSONUnstackedProtocol.tbsonSecuredWrapper = new DefaultUnsecuredWrapper();
+    TBSONUnstackedProtocol.tbsonSecuredWrapper.removeAll();
+  }
+
   public static TBSONSecuredWrapper getSecuredWrapper() {
     return TBSONUnstackedProtocol.tbsonSecuredWrapper;
+  }
+
+  public static void resetCache() {
+    threadSafeTFields.remove();
+    threadSafeTFieldsIdEnum.remove();
   }
 
   /**
@@ -859,6 +870,11 @@ public class TBSONUnstackedProtocol extends TProtocol {
   }
 
   public void reset() {
+    // reset thread local
+    threadSafeFieldsStack.remove();
+    threadSafeSIOStack.remove();
+    threadSafeTBase.remove();
+    threadSafeFieldIdsFilter.remove();
     threadSafeDBObject.remove();
   }
 

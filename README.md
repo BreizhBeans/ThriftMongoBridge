@@ -1,4 +1,4 @@
-# [Thrift Mongo Bridge v0.0.3 Beta]
+# [Thrift Mongo Bridge v0.0.4]
 
 You favorite cloud does not support Cassandra, and your business model is full Thrift ?  Don't worry, Thrift Mongo Bridge can save your life !
 
@@ -13,6 +13,7 @@ BreizhBeans Apache Thrift tools by @FinistSeb and @LostInBrittany
 
 ## Quick Start
 
+### Serialize Thrift POJOS into MongoDB 
 The Helper usage is very simple :
 
 Transform your Thrift objects into Mongo DBObject
@@ -24,6 +25,14 @@ Transform your Mongo DBObject into Thrift objects
 Use your wonderful Thrift objects in your business code, store it directly into MongoDB
 What else ?
 
+### Protect Thrift POJOS fields
+
+You can protect any field (hash + cipher) directly.
+Look at the project example :
+
+ * the secret is stored in a keystore
+ * SecuredWrapper.java implements a 64bits cryptographic hash + AES encryption
+ * SimpleApp.java is an example of how secure field, request it, read it back.
 
 ## Versioning
 
@@ -37,11 +46,14 @@ And constructed with the following guidelines:
 
 ## RELEASES
 
-### Future 0.0.4
+### Future 0.0.5
 * Adds a package ThriftMongoDialect for BSON manipulation based en TFields
 
+### 0.0.4
+* Support of partial deserialization
+* adds secured wraper for TFields 
+
 ### 0.0.3 
-Fixes :
 * Support of primitive types on key maps (Long, Integer, Boolean, Double, Enum )
 
 ### 0.0.2
@@ -50,7 +62,7 @@ Fixes :
 ### 0.0.1 (Not deployed)
 
 ## Bug tracker
-Coming soon, with the first release !
+Coming if necessary!
 
 ## Authors
 
@@ -64,7 +76,7 @@ Coming soon, with the first release !
 
 ## Copyright and license
 
-Copyright 2013 BreizhBeans
+Copyright 2014 BreizhBeans
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this work except in compliance with the License.

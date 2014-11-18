@@ -20,7 +20,6 @@
  * Please see doc/old-thrift-license.txt in the Thrift distribution for
  * details.
  */
-
 namespace java org.breizhbeans.thrift.tools.thriftmongobridge.test
 
 enum ThriftEnum {

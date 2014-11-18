@@ -3,7 +3,7 @@
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>org.breizhbeans.thrift.tools</groupId>
 	<artifactId>thriftMongoBridge</artifactId>
-    <version>0.0.4</version>
+    <version>0.0.4-SNAPSHOT</version>
     <packaging>jar</packaging>
 
     <parent>

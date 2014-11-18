@@ -3,7 +3,7 @@
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>org.breizhbeans.thrift.tools</groupId>
 	<artifactId>thriftMongoBridge</artifactId>
-    <version>0.0.4</version>
+    <version>0.0.4-SNAPSHOT</version>
     <packaging>jar</packaging>
 
     <parent>
@@ -27,8 +27,8 @@
     </licenses>
 
     <scm>
-        <connection>scm:git:ssh://git@github.com:BreizhBeans/ThriftMongoBridge.git</connection>
-        <developerConnection>scm:git:ssh://git@github.com:BreizhBeans/ThriftMongoBridge.git</developerConnection>
+        <connection>scm:git:https://github.com/BreizhBeans/ThriftMongoBridge.git</connection>
+        <developerConnection>scm:git:https://github.com/BreizhBeans/ThriftMongoBridge.git</developerConnection>
         <url>${project.url}</url>
     </scm>
 

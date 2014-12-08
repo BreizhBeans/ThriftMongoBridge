@@ -399,12 +399,8 @@ public class TBSONUnstackedProtocol extends TProtocol {
     return stack.pop();
   }
 
-
-
-
   @Override
   public void writeFieldStop() throws TException {
-
   }
 
   @Override
@@ -520,10 +516,8 @@ public class TBSONUnstackedProtocol extends TProtocol {
       // Its a string field
       ThriftFieldMetadata thriftFieldMetadata = peekWriteField();
 
-
       byte[] butf8 = s.getBytes("UTF-8");
       Object sutf8 = new String(butf8);
-
 
       // write the value (secured)
       if(thriftFieldMetadata.securedFieldMetaData.isSecured()) {
@@ -613,7 +607,6 @@ public class TBSONUnstackedProtocol extends TProtocol {
 
   private Stack<ThriftFieldMetadata> getFieldsStack(Class<? extends TBase> tbase, DBObject dbObject)  throws TException {
     // extract the fields (key from MongoDB)
-    Set<String> mongoKeys = dbObject.keySet();
 
     Stack<ThriftFieldMetadata> writeStack = new Stack<>();
 
@@ -623,6 +616,16 @@ public class TBSONUnstackedProtocol extends TProtocol {
       if (tfieldIdEnum != null) {
         ThriftFieldMetadata thriftFieldMetadata = getTBaseFields(tbase).get(tfieldIdEnum.getThriftFieldId());
         writeStack.push(thriftFieldMetadata);
+      }
+    }
+
+    // extract secure fields stack
+    if (dbObject.containsField("securedwrap")) {
+      for(String id : ((DBObject)dbObject.get("securedwrap")).keySet()) {
+        ThriftFieldMetadata thriftFieldMetadata = getTBaseFields(tbase).get(Short.parseShort(id));
+        if (!thriftFieldMetadata.securedFieldMetaData.isHash()) {
+          writeStack.push(thriftFieldMetadata);
+        }
       }
     }
 

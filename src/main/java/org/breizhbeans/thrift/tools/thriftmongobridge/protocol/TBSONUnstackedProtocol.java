@@ -218,7 +218,6 @@ public class TBSONUnstackedProtocol extends TProtocol {
 
       Class<? extends TBase> thriftClass = threadSafeTBase.get().getClass();
 
-
       if (tbsonSecuredWrapper.isSecured(thriftClass)) {
         structClass.push(new ThriftIO(threadSafeTBase.get().getClass(), new BasicDBObject(), new BasicDBObject()));
       } else {
@@ -250,7 +249,12 @@ public class TBSONUnstackedProtocol extends TProtocol {
           }
           break;
         case TType.STRUCT:
-          structClass.push(new ThriftIO(((StructMetaData) lastField.fieldMetaData.valueMetaData).structClass, new BasicDBObject()));
+          Class<? extends TBase> structMetadataClass =  ((StructMetaData) lastField.fieldMetaData.valueMetaData).structClass;
+          if (tbsonSecuredWrapper.isSecured(structMetadataClass)) {
+            structClass.push(new ThriftIO(structMetadataClass, new BasicDBObject(), new BasicDBObject()));
+          } else {
+            structClass.push(new ThriftIO(structMetadataClass, new BasicDBObject()));
+          }
           break;
       }
     }
@@ -284,14 +288,14 @@ public class TBSONUnstackedProtocol extends TProtocol {
       }else if(lastThriftIO.list){
         ((BasicDBList)lastThriftIO.mongoIO).add(thriftIO.mongoIO);
       }else{
+        // Dont forget to collapse the secured wrap to the current object
+        if(thriftIO.securedMongoIO != null) {
+          thriftIO.mongoIO.put("securedwrap", thriftIO.securedMongoIO);
+        }
         // add {fieldName:value} to the current object
         String fieldName = peekWriteField().tfield.name;
         lastThriftIO.mongoIO.put(fieldName, thriftIO.mongoIO);
 
-        // Dont forget to collapse the secured wrap
-        if(thriftIO.securedMongoIO != null) {
-          lastThriftIO.mongoIO.put("securedwrap", thriftIO.securedMongoIO);
-        }
       }
       return null;
     }

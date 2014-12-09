@@ -125,4 +125,29 @@ public class TestSecuredString {
     assert "simple string".equals(bsonObjectListOut.getSimpleString());
   }
 
+  @Test
+  public void testDeserializeInnerProtectedString() throws Exception {
+    TBSONUnstackedProtocol.addSecuredWrapper(new JUnitSecuredWrapper());
+    TBSONUnstackedProtocol.getSecuredWrapper().secureThriftFields(BSonThrift.class, false, BSonThrift._Fields.ONE_STRING);
+    TBSONUnstackedProtocol.getSecuredWrapper().secureThriftFields(BSonComposite.class, false, BSonComposite._Fields.SIMPLE_STRING);
+
+    TBSONSerializer tbsonSerializer = new TBSONSerializer();
+    TBSONDeserializer tbsonDeserializer = new TBSONDeserializer();
+
+    BSonThrift bsonThrift = new BSonThrift();
+    bsonThrift.setOneString("one string");
+    BSonComposite bsonComposite = new BSonComposite();
+    bsonComposite.setSimpleString("simple string");
+    bsonComposite.setBsonThrift(bsonThrift);
+
+    // serialize into DBObject
+    DBObject dbObject = tbsonSerializer.serialize(bsonComposite);
+
+    BSonComposite bsonCompositeOut = new BSonComposite();
+    tbsonDeserializer.deserialize(bsonCompositeOut, dbObject);
+
+    assert "one string".equals(bsonCompositeOut.getBsonThrift().getOneString());
+    assert "simple string".equals(bsonCompositeOut.getSimpleString());
+
+  }
 }

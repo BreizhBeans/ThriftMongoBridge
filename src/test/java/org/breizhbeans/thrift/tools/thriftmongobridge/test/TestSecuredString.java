@@ -22,7 +22,6 @@ import com.mongodb.DBObject;
 import org.apache.commons.codec.binary.Hex;
 import org.breizhbeans.thrift.tools.thriftmongobridge.TBSONDeserializer;
 import org.breizhbeans.thrift.tools.thriftmongobridge.TBSONSerializer;
-import org.breizhbeans.thrift.tools.thriftmongobridge.protocol.TBSONProtocol;
 import org.breizhbeans.thrift.tools.thriftmongobridge.protocol.TBSONUnstackedProtocol;
 import org.junit.Test;
 
@@ -148,6 +147,5 @@ public class TestSecuredString {
 
     assert "one string".equals(bsonCompositeOut.getBsonThrift().getOneString());
     assert "simple string".equals(bsonCompositeOut.getSimpleString());
-
   }
 }

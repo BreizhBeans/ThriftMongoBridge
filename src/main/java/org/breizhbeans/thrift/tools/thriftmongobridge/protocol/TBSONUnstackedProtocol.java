@@ -292,6 +292,7 @@ public class TBSONUnstackedProtocol extends TProtocol {
         if(thriftIO.securedMongoIO != null) {
           thriftIO.mongoIO.put("securedwrap", thriftIO.securedMongoIO);
         }
+
         // add {fieldName:value} to the current object
         String fieldName = peekWriteField().tfield.name;
         lastThriftIO.mongoIO.put(fieldName, thriftIO.mongoIO);
@@ -926,7 +927,9 @@ public class TBSONUnstackedProtocol extends TProtocol {
 
       if (fieldMetadata.securedFieldMetaData.isSecured()) {
         byte[] data = TBSONUnstackedProtocol.tbsonSecuredWrapper.decipherSecuredField(fieldMetadata.tfield.id, (DBObject)thriftIO.mongoIO.get("securedwrap"));
-        fieldReaded = new String(data);
+        if (data!=null) {
+          fieldReaded = new String(data);
+        }
       } else {
         fieldReaded = thriftIO.mongoIO.get(fieldMetadata.tfield.name);
       }

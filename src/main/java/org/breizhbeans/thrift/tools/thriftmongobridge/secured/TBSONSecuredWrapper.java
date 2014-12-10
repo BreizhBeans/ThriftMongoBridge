@@ -18,12 +18,14 @@
  */
 package org.breizhbeans.thrift.tools.thriftmongobridge.secured;
 
+import com.mongodb.BasicDBObject;
 import com.mongodb.DBObject;
 import org.apache.commons.codec.binary.Hex;
 import org.apache.thrift.TBase;
 import org.apache.thrift.TException;
 import org.apache.thrift.TFieldIdEnum;
 
+import java.io.UnsupportedEncodingException;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -121,6 +123,47 @@ public abstract class TBSONSecuredWrapper {
 
     }
     return null;
+  }
+
+
+  public DBObject getBSON(String prefix, Class<? extends TBase> tbase, TFieldIdEnum field, String value) throws TException {
+    try {
+      DBObject bson = new BasicDBObject();
+
+      ThriftSecuredField securedField = getField(tbase, field.getThriftFieldId());
+
+      StringBuilder builder = new StringBuilder();
+
+      if (prefix != null && prefix.length() > 0) {
+        builder.append(prefix);
+        builder.append(".");
+      }
+
+      builder.append(field.getFieldName());
+
+      if (!securedField.isSecured()) {
+        bson.put( builder.toString(), value);
+      }
+
+      // adds the hash if necessary
+      if (securedField.isHash()) {
+        bson.put( builder.toString() , digest64(value.getBytes()));
+      }
+
+      builder = new StringBuilder();
+
+      if (prefix != null && prefix.length() > 0) {
+        builder.append(prefix);
+        builder.append(".");
+      }
+      builder.append("securedwrap.");
+      builder.append(Short.toString(field.getThriftFieldId()));
+      // adds the wrapped value if necessary
+      bson.put( builder.toString(), Hex.encodeHexString(cipher(value.getBytes("UTF-8"))));
+      return bson;
+    } catch (UnsupportedEncodingException e) {
+      throw new TException(e);
+    }
   }
 
   /**

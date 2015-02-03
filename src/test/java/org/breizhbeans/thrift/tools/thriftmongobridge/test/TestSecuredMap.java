@@ -24,9 +24,16 @@ import org.apache.commons.codec.binary.Hex;
 import org.breizhbeans.thrift.tools.thriftmongobridge.TBSONDeserializer;
 import org.breizhbeans.thrift.tools.thriftmongobridge.TBSONSerializer;
 import org.breizhbeans.thrift.tools.thriftmongobridge.protocol.TBSONUnstackedProtocol;
+import org.junit.After;
+import org.junit.Before;
 import org.junit.Test;
 
 public class TestSecuredMap {
+
+  @Before
+  public void setup() {
+    TBSONUnstackedProtocol.resetSecuredWrapper();
+  }
 
   @Test
   public void testSerializeProtectedMapValue() throws Exception {

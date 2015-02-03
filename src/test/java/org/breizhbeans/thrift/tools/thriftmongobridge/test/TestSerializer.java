@@ -38,7 +38,6 @@ public class TestSerializer {
 
     public TestSerializer() {
       TBSONUnstackedProtocol.resetSecuredWrapper();
-      TBSONUnstackedProtocol.resetCache();
     }
 
     @Test

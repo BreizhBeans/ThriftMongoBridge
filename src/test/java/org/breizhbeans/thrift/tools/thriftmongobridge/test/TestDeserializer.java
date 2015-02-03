@@ -24,6 +24,7 @@ import org.apache.thrift.TBase;
 import org.breizhbeans.thrift.tools.thriftmongobridge.TBSONDeserializer;
 import org.breizhbeans.thrift.tools.thriftmongobridge.TBSONSerializer;
 import org.breizhbeans.thrift.tools.thriftmongobridge.protocol.TBSONUnstackedProtocol;
+import org.junit.Before;
 import org.junit.Test;
 
 import java.util.HashMap;
@@ -31,9 +32,9 @@ import java.util.Map;
 
 public class TestDeserializer {
 
-  public TestDeserializer() {
+  @Before
+  public void setup() throws Exception {
     TBSONUnstackedProtocol.resetSecuredWrapper();
-    TBSONUnstackedProtocol.resetCache();
   }
 
   @Test

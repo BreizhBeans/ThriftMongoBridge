@@ -41,7 +41,7 @@ public class TBSONUnstackedProtocol extends TProtocol {
   // Contains the Thrift object + DBObject -> IO because I code it the Google IO's day :D
   private static ThreadLocal<Stack<ThriftIO>> threadSafeSIOStack = new ThreadLocal<>();
 
-  // IO DBObject and fields
+  // Input/Output DBObject and fields
   private static ThreadLocal<DBObject> threadSafeDBObject = new ThreadLocal<>();
   private static ThreadLocal<TBase<?, ?>> threadSafeTBase = new ThreadLocal<>();
 
@@ -65,6 +65,7 @@ public class TBSONUnstackedProtocol extends TProtocol {
   public static void resetSecuredWrapper() {
     TBSONUnstackedProtocol.tbsonSecuredWrapper = new DefaultUnsecuredWrapper();
     TBSONUnstackedProtocol.tbsonSecuredWrapper.removeAll();
+    TBSONUnstackedProtocol.resetCache();
   }
 
   public static TBSONSecuredWrapper getSecuredWrapper() {
@@ -438,7 +439,9 @@ public class TBSONUnstackedProtocol extends TProtocol {
     // write the document (hash)
     documentThriftIO.mongoIO.put(field.tfield.name, mapThriftIO.mongoIO);
     // write the secured (hash)
-    documentThriftIO.securedMongoIO.put(Short.toString(field.tfield.id), mapThriftIO.securedMongoIO);
+    if (documentThriftIO.securedMongoIO != null) {
+      documentThriftIO.securedMongoIO.put(Short.toString(field.tfield.id), mapThriftIO.securedMongoIO);
+    }
   }
 
   @Override

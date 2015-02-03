@@ -125,6 +125,16 @@ public abstract class TBSONSecuredWrapper {
     return null;
   }
 
+  public byte[] decipherValue(String hexValue) {
+    try {
+      byte[] protectedData = Hex.decodeHex(hexValue.toCharArray());
+      return decipher(protectedData);
+    } catch(Exception exp) {
+
+    }
+    return null;
+  }
+
 
   public DBObject getBSON(String prefix, Class<? extends TBase> tbase, TFieldIdEnum field, String value) throws TException {
     try {

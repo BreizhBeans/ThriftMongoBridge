@@ -411,8 +411,15 @@ public class TBSONUnstackedProtocol extends TProtocol {
   @Override
   public void writeMapBegin(TMap tMap) throws TException {
     //System.out.println("writeMapBegin");
-    // Replace the BasicDbObject by a DBList
-    threadSafeSIOStack.get().push(new ThriftIO(null, new BasicDBObject(), true));
+    // if the field secured ?
+    ThriftFieldMetadata fieldMetadata = peekWriteField();
+
+    BasicDBObject securedFieldSecuredObject = null;
+    if (fieldMetadata.securedFieldMetaData.isSecured()) {
+      securedFieldSecuredObject = new BasicDBObject();
+    }
+
+    threadSafeSIOStack.get().push(new ThriftIO(null, new BasicDBObject(), securedFieldSecuredObject, true, false));
   }
 
   @Override
@@ -422,11 +429,16 @@ public class TBSONUnstackedProtocol extends TProtocol {
 
     // Get the DBObject produced (the map)
     Stack<ThriftIO> thriftIOStack = threadSafeSIOStack.get();
-    ThriftIO thriftIO = thriftIOStack.pop();
+    ThriftIO mapThriftIO = thriftIOStack.pop();
 
     // add {fieldName:value} to the current object
-    String fieldName = peekWriteField().tfield.name;
-    thriftIOStack.peek().mongoIO.put(fieldName, thriftIO.mongoIO);
+    ThriftFieldMetadata field = peekWriteField();
+
+    ThriftIO documentThriftIO = thriftIOStack.peek();
+    // write the document (hash)
+    documentThriftIO.mongoIO.put(field.tfield.name, mapThriftIO.mongoIO);
+    // write the secured (hash)
+    documentThriftIO.securedMongoIO.put(Short.toString(field.tfield.id), mapThriftIO.securedMongoIO);
   }
 
   @Override
@@ -513,6 +525,76 @@ public class TBSONUnstackedProtocol extends TProtocol {
   }
 
 
+  private void writeSecuredString( String s, ThriftFieldMetadata thriftFieldMetadata, ThriftIO thriftIO) throws Exception {
+    byte[] butf8 = s.getBytes("UTF-8");
+    Object sutf8 = new String(butf8);
+
+
+    // MAP SECURED FIELD
+    if (thriftIO.map) {
+      // the string is the map key
+      //keys are unprotected
+      if (thriftIO.key==null) {
+        thriftIO.key = (String) sutf8;
+        return;
+      } else {
+        // the string is the value
+        // crypt the value and add it to the secured field
+        String securedField = Hex.encodeHexString(TBSONUnstackedProtocol.tbsonSecuredWrapper.cipher(butf8));
+        thriftIO.securedMongoIO.put(thriftIO.key, securedField);
+
+        //hash if requested
+        // the the value value is hashed add the hash in the unsecured document
+        if (thriftFieldMetadata.securedFieldMetaData.isHash()){
+          sutf8 = TBSONUnstackedProtocol.tbsonSecuredWrapper.digest64(butf8);
+          thriftIO.mongoIO.put(thriftIO.key, sutf8);
+          thriftIO.key=null;
+        }
+      }
+      return;
+    }
+
+    // STRING SECURED FIELD
+    // ADD IT TO THE SECURED DOCUMENT
+    String securedField = Hex.encodeHexString(TBSONUnstackedProtocol.tbsonSecuredWrapper.cipher(butf8));
+    thriftIO.securedMongoIO.put(Short.toString(thriftFieldMetadata.tfield.id), securedField);
+
+    if (thriftFieldMetadata.securedFieldMetaData.isHash()){
+      Object butf8Hash = TBSONUnstackedProtocol.tbsonSecuredWrapper.digest64(butf8);
+      thriftIO.mongoIO.put(thriftFieldMetadata.tfield.name, butf8Hash);
+    }
+  }
+
+  private void writeUnsecuredString( String s, ThriftFieldMetadata thriftFieldMetadata, ThriftIO thriftIO) throws Exception {
+    byte[] butf8 = s.getBytes("UTF-8");
+    Object sutf8 = new String(butf8);
+
+    //specific map treatment for the map key
+    if (thriftIO.map && thriftIO.key==null) {
+      thriftIO.key = (String) sutf8;
+      return;
+    }
+
+    // write the value (unsecured)
+    //its a map value
+    if(thriftIO.map){
+      thriftIO.mongoIO.put(thriftIO.key, sutf8);
+      thriftIO.key=null;
+      return;
+    }
+
+    //its a list or a set
+    if(thriftIO.list){
+      ((BasicDBList)thriftIO.mongoIO).add(sutf8);
+      return;
+    }
+
+    // classic string case
+    thriftIO.mongoIO.put(thriftFieldMetadata.tfield.name, sutf8);
+  }
+
+
+
   @Override
   public void writeString(String s) throws TException {
     try {
@@ -521,52 +603,11 @@ public class TBSONUnstackedProtocol extends TProtocol {
       // Its a string field
       ThriftFieldMetadata thriftFieldMetadata = peekWriteField();
 
-      byte[] butf8 = s.getBytes("UTF-8");
-      Object sutf8 = new String(butf8);
-
-      // write the value (secured)
-      if(thriftFieldMetadata.securedFieldMetaData.isSecured()) {
-        // crypt the value and add it to the secured field
-        String securedField = Hex.encodeHexString(TBSONUnstackedProtocol.tbsonSecuredWrapper.cipher(butf8));
-        thriftIO.securedMongoIO.put(Short.toString(thriftFieldMetadata.tfield.id), securedField);
-
-        // compute hash from the value if needed
-        if (thriftFieldMetadata.securedFieldMetaData.isHash()) {
-
-        }
+      if (thriftFieldMetadata.securedFieldMetaData.isSecured()) {
+        writeSecuredString(s, thriftFieldMetadata, thriftIO);
+      } else {
+        writeUnsecuredString(s, thriftFieldMetadata, thriftIO);
       }
-
-      //specific map treatment for the map key
-      //keys are unprotected (no sense)
-      if(thriftIO.map && thriftIO.key==null) {
-        thriftIO.key = (String)sutf8;
-        return;
-      } else if(thriftFieldMetadata.securedFieldMetaData.isSecured() && thriftFieldMetadata.securedFieldMetaData.isHash()) {
-        sutf8 = new Long(TBSONUnstackedProtocol.tbsonSecuredWrapper.digest64(butf8));
-      } else if(thriftFieldMetadata.securedFieldMetaData.isSecured() && !thriftFieldMetadata.securedFieldMetaData.isHash()) {
-        // reset the uft8 field
-        // never store it
-        sutf8 = null;
-        return;
-      }
-
-      // Write the field with a value or an hashed value
-
-      //its a map value
-      if(thriftIO.map){
-        thriftIO.mongoIO.put(thriftIO.key, sutf8);
-        thriftIO.key=null;
-        return;
-      }
-
-      //its a list or a set
-      if(thriftIO.list){
-        ((BasicDBList)thriftIO.mongoIO).add(sutf8);
-        return;
-      }
-
-      thriftIO.mongoIO.put(thriftFieldMetadata.tfield.name, sutf8);
-
     } catch (Exception e) {
       throw new TException(e);
     }
@@ -750,13 +791,23 @@ public class TBSONUnstackedProtocol extends TProtocol {
     MapMetaData mapMetaData = (MapMetaData) thriftFieldMetadata.fieldMetaData.valueMetaData;
 
     // extract the DBMap (BasicDbObject)
-    BasicDBObject dbObject = (BasicDBObject) currentIO.mongoIO.get(currentIO.fieldsStack.peek().tfield.name);
+    BasicDBObject dbObject = null;
+    BasicDBObject securedDObject = null;
+    if (thriftFieldMetadata.securedFieldMetaData.isSecured()) {
+      // from the mongoIO securedWrap for a secured map
+      BasicDBObject securedWrap = (BasicDBObject)currentIO.mongoIO.get("securedwrap");
+      securedDObject = (BasicDBObject) securedWrap.get(Short.toString(currentIO.fieldsStack.peek().tfield.id));
+      dbObject = securedDObject;
+    } else {
+      // from the mongoIO field for an unsecured map
+      dbObject = (BasicDBObject) currentIO.mongoIO.get(currentIO.fieldsStack.peek().tfield.name);
+    }
 
     ThriftIO thriftListIO = null;
     if (mapMetaData.valueMetaData.isStruct()) {
-      thriftListIO = new ThriftIO(((StructMetaData) mapMetaData.valueMetaData).structClass, dbObject, null, true, false);
+      thriftListIO = new ThriftIO(((StructMetaData) mapMetaData.valueMetaData).structClass, dbObject, securedDObject, true, false);
     } else {
-      thriftListIO = new ThriftIO(null, dbObject, null, true, false);
+      thriftListIO = new ThriftIO(null, dbObject, securedDObject, true, false);
     }
     thriftListIO.mapIterator = dbObject.entrySet().iterator();
 
@@ -890,6 +941,7 @@ public class TBSONUnstackedProtocol extends TProtocol {
   private Object getCurrentFieldValue(byte ttype)  throws TException {
     ThriftIO thriftIO = peekIOStack();
 
+
     Object fieldReaded = null;
     if( thriftIO.list) {
       fieldReaded = ((BasicDBList) thriftIO.mongoIO).get(thriftIO.containerIndex);
@@ -919,12 +971,19 @@ public class TBSONUnstackedProtocol extends TProtocol {
     } else if( thriftIO.map && thriftIO.mapEntry != null) {
       // a second read for the value
       fieldReaded = thriftIO.mapEntry.getValue();
+
+      // a secured map have a thriftIO.securedMongoIO not null
+      if (thriftIO.securedMongoIO!=null) {
+        byte[] data = TBSONUnstackedProtocol.tbsonSecuredWrapper.decipherValue((String)fieldReaded);
+        fieldReaded = "";
+        if (data!=null) {
+          fieldReaded = new String(data);
+        }
+      }
       thriftIO.mapEntry = null;
     } else {
       // normal field read
-      // if the filed if secured unwrap it first
       ThriftFieldMetadata fieldMetadata = thriftIO.fieldsStack.peek();
-
       if (fieldMetadata.securedFieldMetaData.isSecured()) {
         byte[] data = TBSONUnstackedProtocol.tbsonSecuredWrapper.decipherSecuredField(fieldMetadata.tfield.id, (DBObject)thriftIO.mongoIO.get("securedwrap"));
         if (data!=null) {

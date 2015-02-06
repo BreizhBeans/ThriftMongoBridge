@@ -24,8 +24,14 @@ import org.apache.commons.codec.binary.Hex;
 import org.apache.thrift.TBase;
 import org.apache.thrift.TException;
 import org.apache.thrift.TFieldIdEnum;
+import org.apache.thrift.meta_data.FieldMetaData;
+import org.apache.thrift.meta_data.MapMetaData;
+import org.apache.thrift.protocol.TType;
 
 import java.io.UnsupportedEncodingException;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -56,6 +62,7 @@ public abstract class TBSONSecuredWrapper {
     }
   }
 
+
   private final ThriftSecuredField UNSECURED_FIELD = new ThriftSecuredField();
 
   private ConcurrentHashMap<Class<? extends TBase>, Map<Short, ThriftSecuredField>> securedFields = new ConcurrentHashMap<>();
@@ -66,7 +73,48 @@ public abstract class TBSONSecuredWrapper {
       classSecuredFields = new ConcurrentHashMap<>();
     }
 
+    // get the Field class
+    Class<?> fieldClass = null;
+    Class<?>[] innerClasses = tbase.getClasses();
+    for (Class<?> innerClass : innerClasses) {
+      if ("_Fields".equals(innerClass.getSimpleName())) {
+        fieldClass = innerClass;
+        break;
+      }
+    }
+
+    // extract _Fields
+    Class[] findByNameArgs = new Class[1];
+    findByNameArgs[0] = String.class;
+    Method findByNameMethod = fieldClass.getMethod("findByName", findByNameArgs);
+
+    // extract metadataMap
+    Field metafaField = tbase.getField("metaDataMap");
+    Map<?, FieldMetaData> metaDataMap = (Map<?, org.apache.thrift.meta_data.FieldMetaData>) metafaField.get(tbase);
+
     for(TFieldIdEnum field : fields) {
+      // get the _Field instance
+      org.apache.thrift.TFieldIdEnum  tfieldEnum = (TFieldIdEnum) findByNameMethod.invoke(null, field.getFieldName());
+
+      // get the matadata
+      FieldMetaData fieldMetaData = metaDataMap.get(tfieldEnum);
+
+      // only string are supported
+      switch(fieldMetaData.valueMetaData.type) {
+        case TType.STRING:
+          break;
+
+        case TType.MAP:
+          MapMetaData mapMetaData = (MapMetaData) fieldMetaData.valueMetaData;
+
+          if (mapMetaData.valueMetaData.type != TType.STRING) {
+            throw new UnsupportedTTypeException("Unsupported secured type - FIELD:" + field.getFieldName() + " TYPE:" + mapMetaData.valueMetaData.type);
+          }
+          break;
+        default:
+          throw new UnsupportedTTypeException("Unsupported secured type - FIELD:" + field.getFieldName() + " TYPE:" + fieldMetaData.valueMetaData.type);
+      }
+
       classSecuredFields.put(field.getThriftFieldId(), new ThriftSecuredField(true, hash));
     }
 

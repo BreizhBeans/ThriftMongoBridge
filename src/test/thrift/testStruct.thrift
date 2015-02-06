@@ -69,3 +69,19 @@ struct BSonObjectList {
 	1:string simpleString
 	2:list<AnotherThrift> anotherThrift
 }
+
+
+struct BSonTTypes {
+  1:string            ttypeString,
+  2:bool                ttypeBool,
+  3:i16                 ttypeI16,
+  4:i32                 ttypeI32,
+  5:i64                 ttypeI64,
+  6:binary              ttypeBinary,
+  7:double              ttypeDouble,
+  8:byte                ttypeByte,
+  9:ThriftEnum          ttypeEnum,
+  10:list<double>       ttypeListDouble,
+  11:set<double>        ttypeSetDouble,
+  12:map<string,double> ttypeMapDouble,
+}

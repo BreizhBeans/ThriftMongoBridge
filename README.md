@@ -1,4 +1,4 @@
-# [Thrift Mongo Bridge v0.0.4]
+# [Thrift Mongo Bridge v0.0.5]
 
 You favorite cloud does not support Cassandra, and your business model is full Thrift ?  Don't worry, Thrift Mongo Bridge can save your life !
 
@@ -6,8 +6,6 @@ Why use MongoDB when Spring Data hides Mongo ? Keep the power with Thrift Mongo 
 
 Thrift Mongo Bridge is a simple Helper for easier the development with Thrift and MongoDB. Created and maintained by [Sebastien Lambour](https://twitter.com/FinistSeb) and [Horacio Gonzalez](https://twitter.com/LostInBrittany)
 
-This version is currently under development. The Thrift support is not fully ended.
-Used in beta ready for production in 04/2014
 
 BreizhBeans Apache Thrift tools by @FinistSeb and @LostInBrittany
 
@@ -46,12 +44,18 @@ And constructed with the following guidelines:
 
 ## RELEASES
 
-### Future 0.0.5
+### Future 0.0.6
 * Adds a package ThriftMongoDialect for BSON manipulation based en TFields
+* complete secured lists
 
+### 0.0.5
+* adds support of secured map<string,string>
+* fix secured serializer/deserializer bugs
+* Add exception on unsupported secured types
+  
 ### 0.0.4
 * Support of partial deserialization
-* adds secured wraper for TFields 
+* adds secured wrapper for TFields 
 
 ### 0.0.3 
 * Support of primitive types on key maps (Long, Integer, Boolean, Double, Enum )

@@ -52,6 +52,7 @@ And constructed with the following guidelines:
 * adds support of secured map<string,string>
 * fix secured serializer/deserializer bugs
 * Add exception on unsupported secured types
+* upgrade mongo driver to 3.0.x
   
 ### 0.0.4
 * Support of partial deserialization
